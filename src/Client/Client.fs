@@ -39,6 +39,10 @@ type Msg =
     // We're mostly interested in those
     | UpdateInput of string
     | Add
+    | Destroy of Guid
+    | SetCompleted of Guid * bool
+    | ClearCompleted
+    | SetAllCompleted of bool
 
 // Fetch
 
@@ -66,6 +70,10 @@ let fetchTodos () = fetch HttpMethod.GET todos None
 let request (command: Command) =
     match command with
     | AddCommand addDTO -> fetch HttpMethod.POST todos (Some addDTO)
+    | DeleteCommand id -> fetch HttpMethod.DELETE (todo id) None
+    | PatchCommand (id, patchDTO) -> fetch HttpMethod.PATCH (todo id) (Some patchDTO)
+    | DeleteCompletedCommand -> fetch HttpMethod.DELETE todos None
+    | PatchAllCommand patchDTO -> fetch HttpMethod.PATCH todos (Some patchDTO)
 
 // Initial Model and Elmish Cmd
 
@@ -129,6 +137,17 @@ let update (msg : Msg) (model : Model) : Model * Cmd<Msg> =
               Title = model.Input }
         let cmd = execute (AddCommand addDTO)
         { model with Input = "" }, cmd
+    | Destroy id -> model, execute (DeleteCommand id)
+    | SetCompleted (id, completed) ->
+        let patchDTO : PatchDTO =
+            { Completed = completed }
+        model, execute (PatchCommand (id, patchDTO))
+    | ClearCompleted ->
+        model, execute DeleteCompletedCommand
+    | SetAllCompleted state ->
+        let patchDTO : PatchDTO =
+            { Completed = state }
+        model, execute (PatchAllCommand patchDTO)
 
 // View
 
@@ -157,20 +176,42 @@ let viewTodo (todo: Todo) dispatch =
         [ "completed", todo.Completed ] ]
     [ div
         [ ClassName "view" ]
-        [ label
+        [ input
+            [ ClassName "toggle"
+              Type "checkbox"
+              Checked todo.Completed
+              OnChange (fun _ -> dispatch (SetCompleted (todo.Id, not todo.Completed)))
+              ]
+          label
             [ ]
-            [ str todo.Title ] ] ]
+            [ str todo.Title ]
+          button
+            [ ClassName "destroy"
+              OnClick (fun _ -> dispatch (Destroy todo.Id)) ]
+            []
+        ]
+    ]
+
 
 /// displays whole list of Todos
 let viewTodos model dispatch =
     let todos = model.Todos
     let cssVisibility =
         if List.isEmpty todos then "hidden" else "visible"
-
+    let allComplete = todos |> List.forall (fun x -> x.Completed)
     section
       [ ClassName "main"
         Style [ Visibility cssVisibility ]]
-      [ ul
+      [ input
+          [ ClassName "toggle-all"
+            Type  "checkbox"
+            Checked allComplete
+            OnChange ignore
+            ]
+        label
+          [ OnClick (fun _ -> dispatch (SetAllCompleted ( not allComplete )))
+          ] []
+        ul
           [ ClassName "todo-list" ]
           [ for todo in todos ->
                 viewTodo todo dispatch ] ]
@@ -192,7 +233,13 @@ let viewControls model dispatch =
         [ span
               [ ClassName "todo-count" ]
               [ strong [] [ str (string todosLeft) ]
-                str (item + " left") ] ]
+                str (item + " left") ]
+          button
+            [ ClassName "clear-completed"
+              Hidden (todosCompleted = 0)
+              OnClick (fun _ -> dispatch ClearCompleted)]
+            [ str "Clear completed" ]
+         ]
 
 /// combines all parts into whole
 let view model dispatch =

@@ -9,6 +9,9 @@ type AddDTO =
     { Id : Guid
       Title : string }
 
+type PatchDTO =
+    { Completed : bool }
+
 /// Command is a part of our domain
 /// It can be executed by performing certain action.
 /// Executing the Command results in producing an Event or an Error.
@@ -16,6 +19,10 @@ type AddDTO =
 /// we'll follow a suffix convention, e.g. `AddCommand`
 type Command =
     | AddCommand of AddDTO
+    | DeleteCommand of Guid
+    | PatchCommand of Guid * PatchDTO
+    | DeleteCompletedCommand
+    | PatchAllCommand of PatchDTO
 
 /// Todo is the main type in our domain.
 /// We'll use `Todo list` type to keep track of all Todos.
@@ -29,12 +36,17 @@ type Todo =
 /// We use past tense for naming those, e.g. `TodoAdded`.
 type Event =
     | TodoAdded of Todo
+    | TodoDeleted of Todo
+    | TodoPatched of Todo
+    | CompletedTodosDeleted
+    | AllTodosMarkedAs of bool
 
 /// Error is part of our domain.
 /// It can be a result of executing a Command from invalid state.
 /// E.g. `TodoIdAlreadyExists` when trying to add a Todo with duplicate Id.
 type Error =
     | TodoIdAlreadyExists
+    | TodoNotFound
 
 /// Todos module is there for our domain logic
 module Todos =
@@ -54,6 +66,21 @@ module Todos =
                       Title = addDTO.Title
                       Completed = false }
                 TodoAdded todo |> Ok
+        | DeleteCommand id ->
+            let todo = todos |> List.tryFind (fun t -> t.Id = id)
+            match todo with
+                | None -> Error TodoNotFound
+                | Some x -> TodoDeleted x |> Ok
+        | PatchCommand (id, patchDTO) ->
+            let todo = todos |> List.tryFind (fun t -> t.Id = id)
+            match todo with
+                | None -> Error TodoNotFound
+                | Some x -> TodoPatched { x with Completed = patchDTO.Completed } |> Ok
+        | DeleteCompletedCommand ->
+            CompletedTodosDeleted |> Ok
+        | PatchAllCommand patchDTO ->
+            AllTodosMarkedAs patchDTO.Completed |> Ok
+
 
     /// apply takes current state (Todo list) and an Event
     /// and returns next state (Todo list)
@@ -63,3 +90,11 @@ module Todos =
         match event with
         | TodoAdded todo ->
             todos @ [ todo ]
+        | TodoDeleted todo ->
+            todos |> List.filter (fun x -> x.Id <> todo.Id)
+        | TodoPatched todo ->
+            todos |> List.map (fun x -> if x.Id = todo.Id then todo else x)
+        | CompletedTodosDeleted ->
+            todos |> List.filter (fun x -> not x.Completed)
+        | AllTodosMarkedAs state ->
+            todos |> List.map (fun x -> {x with Completed = state})
