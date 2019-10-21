@@ -21,6 +21,7 @@ type Command =
     | AddCommand of AddDTO
     | DeleteCommand of Guid
     | PatchCommand of Guid * PatchDTO
+    | DeleteCompletedCommand
 
 /// Todo is the main type in our domain.
 /// We'll use `Todo list` type to keep track of all Todos.
@@ -36,6 +37,7 @@ type Event =
     | TodoAdded of Todo
     | TodoDeleted of Todo
     | TodoPatched of Todo
+    | CompletedTodosDeleted
 
 /// Error is part of our domain.
 /// It can be a result of executing a Command from invalid state.
@@ -72,6 +74,8 @@ module Todos =
             match todo with
                 | None -> Error TodoNotFound
                 | Some x -> TodoPatched { x with Completed = patchDTO.Completed } |> Ok
+        | DeleteCompletedCommand ->
+            CompletedTodosDeleted |> Ok
 
 
     /// apply takes current state (Todo list) and an Event
@@ -86,3 +90,5 @@ module Todos =
             todos |> List.filter (fun x -> x.Id <> todo.Id)
         | TodoPatched todo ->
             todos |> List.map (fun x -> if x.Id = todo.Id then todo else x)
+        | CompletedTodosDeleted ->
+            todos |> List.filter (fun x -> not x.Completed)

@@ -41,6 +41,7 @@ type Msg =
     | Add
     | Destroy of Guid
     | SetCompleted of Guid * bool
+    | ClearCompleted
 
 // Fetch
 
@@ -70,6 +71,7 @@ let request (command: Command) =
     | AddCommand addDTO -> fetch HttpMethod.POST todos (Some addDTO)
     | DeleteCommand id -> fetch HttpMethod.DELETE (todo id) None
     | PatchCommand (id, patchDTO) -> fetch HttpMethod.PATCH (todo id) (Some patchDTO)
+    | DeleteCompletedCommand -> fetch HttpMethod.DELETE todos None
 
 // Initial Model and Elmish Cmd
 
@@ -138,6 +140,8 @@ let update (msg : Msg) (model : Model) : Model * Cmd<Msg> =
         let patchDTO : PatchDTO =
             { Completed = completed }
         model, execute (PatchCommand (id, patchDTO))
+    | ClearCompleted ->
+        model, execute DeleteCompletedCommand
 
 // View
 
@@ -214,7 +218,13 @@ let viewControls model dispatch =
         [ span
               [ ClassName "todo-count" ]
               [ strong [] [ str (string todosLeft) ]
-                str (item + " left") ] ]
+                str (item + " left") ]
+          button
+            [ ClassName "clear-completed"
+              Hidden (todosCompleted = 0)
+              OnClick (fun _ -> dispatch ClearCompleted)]
+            [ str "Clear completed" ]
+         ]
 
 /// combines all parts into whole
 let view model dispatch =
