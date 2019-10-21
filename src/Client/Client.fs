@@ -42,6 +42,7 @@ type Msg =
     | Destroy of Guid
     | SetCompleted of Guid * bool
     | ClearCompleted
+    | SetAllCompleted of bool
 
 // Fetch
 
@@ -72,6 +73,7 @@ let request (command: Command) =
     | DeleteCommand id -> fetch HttpMethod.DELETE (todo id) None
     | PatchCommand (id, patchDTO) -> fetch HttpMethod.PATCH (todo id) (Some patchDTO)
     | DeleteCompletedCommand -> fetch HttpMethod.DELETE todos None
+    | PatchAllCommand patchDTO -> fetch HttpMethod.PATCH todos (Some patchDTO)
 
 // Initial Model and Elmish Cmd
 
@@ -142,6 +144,10 @@ let update (msg : Msg) (model : Model) : Model * Cmd<Msg> =
         model, execute (PatchCommand (id, patchDTO))
     | ClearCompleted ->
         model, execute DeleteCompletedCommand
+    | SetAllCompleted state ->
+        let patchDTO : PatchDTO =
+            { Completed = state }
+        model, execute (PatchAllCommand patchDTO)
 
 // View
 
@@ -192,11 +198,20 @@ let viewTodos model dispatch =
     let todos = model.Todos
     let cssVisibility =
         if List.isEmpty todos then "hidden" else "visible"
-
+    let allComplete = todos |> List.forall (fun x -> x.Completed)
     section
       [ ClassName "main"
         Style [ Visibility cssVisibility ]]
-      [ ul
+      [ input
+          [ ClassName "toggle-all"
+            Type  "checkbox"
+            Checked allComplete
+            OnChange ignore
+            ]
+        label
+          [ OnClick (fun _ -> dispatch (SetAllCompleted ( not allComplete )))
+          ] []
+        ul
           [ ClassName "todo-list" ]
           [ for todo in todos ->
                 viewTodo todo dispatch ] ]
